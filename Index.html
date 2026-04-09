@@ -1,0 +1,75 @@
+<!DOCTYPE html><html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OIO ONE Família PRO</title><script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script><style>
+body{margin:0;background:#000;color:#fff;font-family:sans-serif;display:flex;flex-direction:column;height:100vh}
+#chat{flex:1;overflow:auto;padding:10px}
+.msg{padding:10px;border-radius:12px;margin:5px 0;background:#111;max-width:80%}
+.me{background:#0066ff;margin-left:auto}
+#controls{display:flex;padding:10px;gap:5px}
+input{flex:1;padding:10px;border-radius:20px;border:none}
+button{padding:10px;border:none;border-radius:10px}
+img,video{max-width:200px;border-radius:10px;margin-top:5px}
+</style></head>
+<body><div id="chat"></div><div id="controls">
+<input id="msg" placeholder="Mensagem">
+<button onclick="send()">Enviar</button>
+<button onclick="file.click()">+</button>
+</div><input type="file" id="file" hidden><script>
+const config={
+ apiKey:"SUA_API_KEY",
+ databaseURL:"SUA_DATABASE_URL",
+ storageBucket:"SEU_BUCKET"
+}
+firebase.initializeApp(config)
+
+const db=firebase.database().ref("chat")
+const storage=firebase.storage()
+
+let user=localStorage.getItem("user")||prompt("Nome:")
+localStorage.setItem("user",user)
+
+function render(m){
+ const d=document.createElement("div")
+ d.className="msg "+(m.user===user?"me":"")
+ d.innerHTML=`<b>${m.user}</b><br>${m.text||""}`
+ if(m.img)d.innerHTML+=`<img src="${m.img}">`
+ if(m.audio)d.innerHTML+=`<audio controls src="${m.audio}"></audio>`
+ if(m.video)d.innerHTML+=`<video controls src="${m.video}"></video>`
+ chat.appendChild(d)
+ chat.scrollTop=chat.scrollHeight
+}
+
+// realtime
+ db.limitToLast(50).on("child_added",s=>render(s.val()))
+
+// enviar texto
+function send(){
+ const v=msg.value.trim()
+ if(!v)return
+ db.push({user,text:v,ts:Date.now()})
+ msg.value=""
+}
+
+// upload mídia
+file.onchange=async e=>{
+ const f=e.target.files[0]
+ if(!f)return
+
+ const ref=storage.ref("midia/"+Date.now()+f.name)
+ await ref.put(f)
+ const url=await ref.getDownloadURL()
+
+ if(f.type.startsWith("image")){
+  db.push({user,img:url})
+ }
+ else if(f.type.startsWith("video")){
+  db.push({user,video:url})
+ }
+ else{
+  db.push({user,audio:url})
+ }
+}
+</script></body>
+</html>
