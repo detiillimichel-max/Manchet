@@ -103,8 +103,6 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:var(-
 <header id="topo">
   <div class="logo">OIO ONE<span class="logo-tag">FAMÍLIA</span></div>
   <div class="topo-actions">
-    <i class="fa-solid fa-circle-plus topo-btn" onclick="postarStory()"></i>
-    <i class="fa-solid fa-video topo-btn" onclick="abrirTela('galeria')"></i>
     <i class="fa-solid fa-comment-dots topo-btn" onclick="abrirTela('chat')"></i>
   </div>
 </header>
@@ -115,20 +113,7 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:var(-
   <div id="mensagens"></div>
 </section>
 
-<section class="tela" id="tela-galeria">
-  <div class="galeria-header">
-    <div class="galeria-title">GALERIA</div>
-    <button class="btn-postar" onclick="document.getElementById('videoInput').click()">
-      <i class="fa-solid fa-plus"></i> POSTAR
-    </button>
-  </div>
-  <div id="grid-videos"></div>
-</section>
-
 <div id="controles">
-  <div class="ctrl-btn" onclick="abrirCamera()">
-    <i class="fa-solid fa-camera"></i>
-  </div>
   <div class="ctrl-btn" id="btnMic" onclick="toggleGravacao()">
     <i class="fa-solid fa-microphone"></i>
   </div>
@@ -138,9 +123,6 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:var(-
   </button>
 </div>
 
-<input type="file" id="midiaInput" accept="image/*,video/*" style="display:none">
-<input type="file" id="videoInput" accept="video/*" style="display:none">
-<input type="file" id="fotoMembro" accept="image/*" style="display:none">
 
 <div class="modal-bg" id="modalMembro" onclick="fecharModal(event)">
   <div class="modal-sheet">
@@ -162,8 +144,6 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const storage = firebase.storage();
 const dbMsg = db.ref("familia_mensagens");
-const dbVideos = db.ref("familia_videos");
-const dbStories = db.ref("familia_stories");
 const dbStatus = db.ref("familia_status");
 
 let meuNome = localStorage.getItem("oio_nome") || "";
@@ -221,30 +201,18 @@ const membrosDefault = [
   { nome:"Gabriela", foto:"", emoji:"👩" }
 ];
 let membrosLista = JSON.parse(localStorage.getItem("oio_membros")) || membrosDefault;
-let storiesAtivos = {};
 
 function salvarMembros() { localStorage.setItem("oio_membros", JSON.stringify(membrosLista)); }
-
-dbStories.on('value', snap => {
-  storiesAtivos = {};
-  const agora = Date.now();
-  snap.forEach(c => {
-    const s = c.val();
-    if(s.expira > agora) storiesAtivos[s.autor] = true;
-  });
-  renderMembros();
-});
 
 function renderMembros() {
   const bar = document.getElementById("familia-bar");
   bar.innerHTML = "";
   membrosLista.forEach(m => {
     const div = document.createElement("div");
-    const temStory = storiesAtivos[m.nome];
-    div.className = "membro" + (m.nome === meuNome? " ativo" : "") + (temStory? " story" : "");
-    div.onclick = () => temStory? abrirStory(m.nome) : trocarMembro(m.nome);
-    const fotoConteudo = m.foto? `<img src="${m.foto}" alt="${m.nome}">` : `<span>${m.emoji || m.nome[0].toUpperCase()}</span>`;
-    div.innerHTML = `<div class="membro-ring"><div class="membro-foto">${fotoConteudo}</div></div><span class="membro-nome">${m.nome}</span>`;
+    div.className = "membro" + (m.nome === meuNome ? " ativo" : "");
+    div.onclick = () => trocarMembro(m.nome);
+    const fotoConteudo = m.foto ? `<img src="${m.foto}" alt="${escapeHtml(m.nome)}">` : `<span>${m.emoji || escapeHtml(m.nome[0].toUpperCase())}</span>`;
+    div.innerHTML = `<div class="membro-ring"><div class="membro-foto">${fotoConteudo}</div></div><span class="membro-nome">${escapeHtml(m.nome)}</span>`;
     bar.appendChild(div);
   });
   const add = document.createElement("div");
@@ -283,30 +251,104 @@ function abrirTela(id) {
   vibrar(25);
 }
 
+const MESSAGES_CACHE_KEY = "oio_familia_mensagens_cache_v2";
+let mensagensCache = [];
+
+function carregarCacheMensagens() {
+  try {
+    const cache = JSON.parse(localStorage.getItem(MESSAGES_CACHE_KEY) || "[]");
+    return Array.isArray(cache) ? cache.slice(-100) : [];
+  } catch(e) {
+    return [];
+  }
+}
+
+function salvarCacheMensagens(lista) {
+  try {
+    mensagensCache = lista.slice(-100);
+    localStorage.setItem(MESSAGES_CACHE_KEY, JSON.stringify(mensagensCache));
+  } catch(e) {
+    console.warn("Não foi possível salvar o cache local das mensagens.", e);
+  }
+}
+
+function renderListaMensagens(lista) {
+  const container = document.getElementById("mensagens");
+  const eraNoFundo = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
+  container.innerHTML = "";
+  lista.forEach(m => renderMensagem(m, container));
+  if (eraNoFundo || primeiraCarga) container.scrollTop = container.scrollHeight;
+}
+
 function enviar() {
   const input = document.getElementById("msgInput");
   const texto = input.value.trim();
   if (!texto) return;
+
   if(texto.startsWith('@ia ')) {
     chamarIA(texto.replace('@ia ', ''));
     input.value = "";
     return;
   }
-  dbMsg.push({ nome: meuNome, foto: minhaFoto, texto, ts: Date.now() });
-  input.value = ""; somEnviar(); vibrar(40);
+
+  const mensagem = {
+    nome: meuNome,
+    foto: minhaFoto,
+    texto,
+    ts: Date.now()
+  };
+
+  dbMsg.push(mensagem)
+    .then(() => {
+      somEnviar();
+      vibrar(40);
+    })
+    .catch(err => {
+      console.error("Falha ao salvar mensagem:", err);
+      toast("Mensagem não salva. Verifique a conexão.");
+    });
+
+  input.value = "";
 }
 
 let primeiraCarga = true;
 let contadorMsgs = 0;
-dbMsg.limitToLast(40).on("value", snap => {
-  const container = document.getElementById("mensagens");
-  const eraNoFundo = container.scrollHeight - container.scrollTop - container.clientHeight < 80;
-  container.innerHTML = "";
-  let count = 0;
-  snap.forEach(c => { count++; renderMensagem(c.val(), container); });
-  if (eraNoFundo || primeiraCarga) container.scrollTop = container.scrollHeight;
-  if (!primeiraCarga && count > contadorMsgs) { somReceber(); vibrar(30); }
-  contadorMsgs = count; primeiraCarga = false;
+mensagensCache = carregarCacheMensagens();
+
+if (mensagensCache.length) {
+  renderListaMensagens(mensagensCache);
+}
+
+dbMsg.limitToLast(100).on("value", snap => {
+  const lista = [];
+  snap.forEach(c => {
+    const mensagem = c.val();
+    if (mensagem && (mensagem.texto || mensagem.audio)) {
+      lista.push(mensagem);
+    }
+  });
+
+  // Só substitui a tela quando o Firebase entregou uma lista válida.
+  // Assim uma falha transitória de leitura não apaga as mensagens da tela.
+  if (lista.length > 0 || snap.exists()) {
+    if (!primeiraCarga && lista.length > contadorMsgs) {
+      somReceber();
+      vibrar(30);
+    }
+    renderListaMensagens(lista);
+    salvarCacheMensagens(lista);
+    contadorMsgs = lista.length;
+  } else if (!mensagensCache.length) {
+    renderListaMensagens([]);
+  }
+
+  primeiraCarga = false;
+}, error => {
+  console.error("Leitura do chat cancelada:", error);
+  if (mensagensCache.length) {
+    renderListaMensagens(mensagensCache);
+  }
+  toast("Mantendo as mensagens salvas neste aparelho.");
 });
 
 function renderMensagem(m, container) {
@@ -314,10 +356,11 @@ function renderMensagem(m, container) {
   const wrap = document.createElement("div");
   wrap.className = `balao-wrap ${minha? "minha" : "deles"}`;
   let conteudo = "";
+  // Fotos e vídeos ficam deliberadamente bloqueados nesta versão.
+  // Mensagens de texto e áudio continuam disponíveis.
   if (m.texto) conteudo += `<div>${escapeHtml(m.texto)}</div>`;
-  if (m.imgUrl) conteudo += `<img src="${m.imgUrl}" loading="lazy">`;
-  if (m.videoUrl) conteudo += `<video src="${m.videoUrl}" controls playsinline></video>`;
   if (m.audio) conteudo += `<audio controls style="width:100%;margin-top:8px;height:40px" preload="metadata"><source src="${m.audio}" type="audio/webm"></audio>`;
+  if (!conteudo) return;
   const hora = m.ts? new Date(m.ts).toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}) : "";
   wrap.innerHTML = `${!minha? `<div class="balao-autor">${escapeHtml(m.nome)}</div>` : ""}<div class="balao ${minha? "minha" : "deles"}">${conteudo}<span class="balao-time">${hora}</span></div>`;
   container.appendChild(wrap);
@@ -393,98 +436,6 @@ dbStatus.on('value', snap => {
     input.placeholder = "Mensagem para a família...";
   }
 });
-
-let streamCamera = null;
-async function abrirCamera() {
-  const overlay = document.createElement('div');
-  overlay.id = 'camera-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:#000;z-index:1200;display:flex;flex-direction:column';
-  const video = document.createElement('video');
-  video.style.cssText = 'width:100%;flex:1;object-fit:cover';
-  video.autoplay = true;
-  video.playsInline = true;
-  const controles = document.createElement('div');
-  controles.style.cssText = 'padding:20px;background:#000;display:flex;justify-content:center;gap:30px';
-  controles.innerHTML = `<div onclick="fecharCamera()" style="width:50px;height:50px;border-radius:50%;background:var(--glass);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.2rem"><i class="fa-solid fa-xmark"></i></div><div onclick="capturarFoto()" style="width:70px;height:70px;border-radius:50%;border:4px solid #fff;display:flex;align-items:center;justify-content:center"><div style="width:54px;height:54px;background:#fff;border-radius:50%"></div></div><div style="width:50px"></div>`;
-  overlay.appendChild(video);
-  overlay.appendChild(controles);
-  document.body.appendChild(overlay);
-  try {
-    streamCamera = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-    video.srcObject = streamCamera;
-  } catch(e) {
-    toast("Câmera bloqueada ❌");
-    fecharCamera();
-  }
-}
-function fecharCamera() {
-  if(streamCamera) streamCamera.getTracks().forEach(t=>t.stop());
-  document.getElementById('camera-overlay')?.remove();
-}
-function capturarFoto() {
-  const video = document.querySelector('#camera-overlay video');
-  const canvas = document.createElement('canvas');
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext('2d').drawImage(video, 0, 0);
-  const imgUrl = canvas.toDataURL('image/jpeg', 0.8);
-  dbMsg.push({ nome: meuNome, imgUrl, ts: Date.now() });
-  fecharCamera();
-  somEnviar();
-}
-
-function postarStory() {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.accept = 'image/*,video/*';
-  input.onchange = e => {
-    const file = e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      dbStories.push({
-        autor: meuNome,
-        foto: minhaFoto,
-        midia: ev.target.result,
-        tipo: file.type.startsWith('video')? 'video' : 'img',
-        ts: Date.now(),
-        expira: Date.now() + 86400000
-      });
-      toast("Story no ar! Some em 24h 📸");
-    };
-    reader.readAsDataURL(file);
-  };
-  input.click();
-}
-
-function abrirStory(nome) {
-  dbStories.orderByChild('autor').equalTo(nome).limitToLast(1).once('value', snap => {
-    snap.forEach(c => {
-      const s = c.val();
-      if(s.expira < Date.now()) return;
-      const overlay = document.createElement('div');
-      overlay.style.cssText = 'position:fixed;inset:0;background:#000;z-index:1300;display:flex;flex-direction:column;align-items:center;justify-content:center';
-      const header = document.createElement('div');
-      header.style.cssText = 'position:absolute;top:20px;left:20px;right:20px;display:flex;align-items:center;gap:10px;color:#fff;font-family:var(--ff-head)';
-      header.innerHTML = `<div style="width:36px;height:36px;border-radius:50%;background:var(--glass);display:flex;align-items:center;justify-content:center">${s.autor[0]}</div><span>${s.autor}</span><div style="flex:1"></div><i class="fa-solid fa-xmark" style="font-size:1.5rem" onclick="this.parentElement.parentElement.remove()"></i>`;
-      const midia = s.tipo === 'video'?
-        `<video src="${s.midia}" autoplay playsinline style="max-width:100%;max-height:80vh"></video>` :
-        `<img src="${s.midia}" style="max-width:100%;max-height:80vh;object-fit:contain">`;
-      overlay.innerHTML = midia;
-      overlay.appendChild(header);
-      document.body.appendChild(overlay);
-      setTimeout(()=>overlay.remove(), 5000);
-    });
-  });
-}
-
-setInterval(() => {
-  dbStories.once('value', snap => {
-    snap.forEach(child => {
-      if(child.val().expira < Date.now()) child.ref.remove();
-    });
-  });
-}, 300000);
 
 async function chamarIA(pergunta) {
   const prompt = `Você é OIO IA, assistente carinhoso da família. Responda em 1-2 frases, PT-BR, tom leve: ${pergunta}`;
