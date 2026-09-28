@@ -133,7 +133,6 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:var(-
     <input class="modal-input" id="loginEmail" type="email" placeholder="E-mail" autocomplete="email">
     <input class="modal-input" id="loginSenha" type="password" placeholder="Senha" autocomplete="current-password">
     <button class="modal-ok" onclick="entrarConta()">ENTRAR</button>
-    <button class="modal-ok" style="margin-top:10px;background:var(--glass);color:var(--text);border:1px solid var(--border)" onclick="entrarGoogle()">ENTRAR COM GOOGLE</button>
     <div id="loginStatus" style="font-size:.75rem;color:var(--muted);text-align:center;margin-top:12px"></div>
   </div>
 </div>
@@ -293,29 +292,6 @@ async function entrarConta() {
   }
 }
 
-async function entrarGoogle() {
-  const status = document.getElementById("loginStatus");
-  const provider = new firebase.auth.GoogleAuthProvider();
-  status.textContent = "Abrindo Google...";
-  try {
-    const result = await auth.signInWithPopup(provider);
-    status.textContent = "Conectado: " + (result.user.email || "Google");
-    document.getElementById("modalLogin").classList.remove("aberto");
-    toast("Login Google realizado.");
-  } catch (err) {
-    console.error("Login Google:", err);
-    if (err && err.code === "auth/popup-blocked") {
-      try {
-        await auth.signInWithRedirect(provider);
-        return;
-      } catch (redirectErr) {
-        console.error("Redirect Google:", redirectErr);
-      }
-    }
-    status.textContent = "Login Google não disponível nesta configuração.";
-    toast("Não foi possível entrar com Google.");
-  }
-}
 
 function adicionarMembro() {
   const nome = document.getElementById("novoNome").value.trim();
