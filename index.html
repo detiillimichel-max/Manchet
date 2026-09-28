@@ -266,6 +266,11 @@ let authReady = !!auth.currentUser;
 auth.onAuthStateChanged(user => {
   authReady = !!user;
   atualizarEstadoLogin(user);
+  if (!user) {
+    setTimeout(() => {
+      if (!auth.currentUser) abrirLogin();
+    }, 350);
+  }
 });
 
 let meuNome = localStorage.getItem("oio_nome") || "";
