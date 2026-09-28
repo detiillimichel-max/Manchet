@@ -708,9 +708,9 @@ async function enviar() {
   }
 }
 
-let primeiraCarga = true;
+primeiraCarga = true;
 let contadorMsgs = 0;
-let mensagensCache = carregarCacheMensagens();
+mensagensCache = carregarCacheMensagens();
 
 if (mensagensCache.length) {
   renderListaMensagens(mensagensCache);
