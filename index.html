@@ -337,15 +337,20 @@ renderMembros();
 
 
 function abrirLogin() {
-  const btn = document.querySelector('#modalLogin button[onclick="criarConta"]');
-  if (btn) {
-    btn.textContent = "ENTRAR";
-    btn.onclick = entrarConta;
+  const primeiroAcesso = !auth.currentUser && !localStorage.getItem("manchet_conta_criada");
+  if (primeiroAcesso) {
+    abrirCadastro();
+  } else {
+    const btn = document.querySelector('#modalLogin button[onclick="criarConta"]');
+    if (btn) {
+      btn.textContent = "ENTRAR";
+      btn.onclick = entrarConta;
+    }
+    const modalTitle = document.querySelector("#modalLogin .modal-title");
+    if (modalTitle) modalTitle.textContent = "ENTRAR NA FAMÍLIA";
+    document.getElementById("modalLogin").classList.add("aberto");
+    setTimeout(() => document.getElementById("loginEmail")?.focus(), 100);
   }
-  const modalTitle = document.querySelector("#modalLogin .modal-title");
-  if (modalTitle) modalTitle.textContent = "ENTRAR NA FAMÍLIA";
-  document.getElementById("modalLogin").classList.add("aberto");
-  setTimeout(() => document.getElementById("loginEmail")?.focus(), 100);
 }
 
 function fecharLogin(e) {
@@ -369,7 +374,7 @@ function abrirCadastro() {
   document.getElementById("loginEmail").value = "";
   document.getElementById("loginSenha").value = "";
   const status = document.getElementById("loginStatus");
-  status.textContent = "Digite seu e-mail e crie uma senha.";
+  status.textContent = "Primeira vez? Crie sua conta com e-mail e senha.";
   const btn = document.querySelector('#modalLogin button[onclick="entrarConta()"]');
   if (btn) {
     btn.textContent = "CRIAR E ENTRAR";
@@ -394,8 +399,10 @@ async function criarConta() {
   status.textContent = "Criando sua conta...";
   try {
     const cred = await auth.createUserWithEmailAndPassword(email, senha);
+    localStorage.setItem("manchet_conta_criada", "1");
     document.getElementById("modalLogin").classList.remove("aberto");
-    toast("Conta criada! Agora você já pode enviar mensagens.");
+    toast("Conta criada! Você já está conectado.");
+    atualizarEstadoLogin(cred.user);
     console.log("Conta Manchet criada:", cred.user.uid);
   } catch (err) {
     console.error("Cadastro Firebase:", err);
@@ -422,6 +429,7 @@ async function entrarConta() {
   status.textContent = "Entrando...";
   try {
     const cred = await auth.signInWithEmailAndPassword(email, senha);
+    localStorage.setItem("manchet_conta_criada", "1");
     status.textContent = "Conectado: " + (cred.user.email || email);
     document.getElementById("modalLogin").classList.remove("aberto");
     toast("Login realizado. Agora suas mensagens serão salvas.");
