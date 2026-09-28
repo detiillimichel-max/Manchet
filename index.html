@@ -159,42 +159,6 @@ const auth = firebase.auth();
 const db = firebase.database();
 const storage = firebase.storage();
 
-let authReady = false;
-let authPromise = null;
-
-function autenticarAnonimo() {
-  if (auth.currentUser) {
-    authReady = true;
-    return Promise.resolve(auth.currentUser);
-  }
-  if (authPromise) return authPromise;
-
-  authPromise = auth.signInAnonymously()
-    .then(result => {
-      authReady = true;
-      console.log("Firebase Auth anônimo ativo:", result.user.uid);
-      return result.user;
-    })
-    .catch(err => {
-      authReady = false;
-      authPromise = null;
-      console.error("Falha no Firebase Auth anônimo:", err);
-      const msg = err && err.code === "auth/operation-not-allowed"
-        ? "Ative o login Anônimo no Firebase Authentication."
-        : "Não foi possível autenticar no Firebase.";
-      toast(msg);
-      throw err;
-    });
-
-  return authPromise;
-}
-
-auth.onAuthStateChanged(user => {
-  authReady = !!user;
-  if (user) console.log("Firebase autenticado:", user.uid);
-});
-
-autenticarAnonimo();
 const dbMsg = db.ref("familia_mensagens");
 const dbStatus = db.ref("familia_status");
 
@@ -331,9 +295,9 @@ async function entrarConta() {
 
 async function entrarGoogle() {
   const status = document.getElementById("loginStatus");
+  const provider = new firebase.auth.GoogleAuthProvider();
   status.textContent = "Abrindo Google...";
   try {
-    const provider = new firebase.auth.GoogleAuthProvider();
     const result = await auth.signInWithPopup(provider);
     status.textContent = "Conectado: " + (result.user.email || "Google");
     document.getElementById("modalLogin").classList.remove("aberto");
