@@ -125,6 +125,19 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:var(-
 </div>
 
 
+
+<div class="modal-bg" id="modalLogin" onclick="fecharLogin(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">ENTRAR NA FAMÍLIA</div>
+    <input class="modal-input" id="loginEmail" type="email" placeholder="E-mail" autocomplete="email">
+    <input class="modal-input" id="loginSenha" type="password" placeholder="Senha" autocomplete="current-password">
+    <button class="modal-ok" onclick="entrarConta()">ENTRAR</button>
+    <button class="modal-ok" style="margin-top:10px;background:var(--glass);color:var(--text);border:1px solid var(--border)" onclick="entrarGoogle()">ENTRAR COM GOOGLE</button>
+    <div id="loginStatus" style="font-size:.75rem;color:var(--muted);text-align:center;margin-top:12px"></div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modalMembro" onclick="fecharModal(event)">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
@@ -184,6 +197,12 @@ auth.onAuthStateChanged(user => {
 autenticarAnonimo();
 const dbMsg = db.ref("familia_mensagens");
 const dbStatus = db.ref("familia_status");
+
+let authReady = !!auth.currentUser;
+auth.onAuthStateChanged(user => {
+  authReady = !!user;
+  atualizarEstadoLogin(user);
+});
 
 let meuNome = localStorage.getItem("oio_nome") || "";
 if (!meuNome) {
@@ -267,6 +286,73 @@ function trocarMembro(nome) {
 }
 renderMembros();
 
+
+function abrirLogin() {
+  document.getElementById("modalLogin").classList.add("aberto");
+  setTimeout(() => document.getElementById("loginEmail")?.focus(), 100);
+}
+
+function fecharLogin(e) {
+  if (!e || e.target === document.getElementById("modalLogin"))
+    document.getElementById("modalLogin").classList.remove("aberto");
+}
+
+function atualizarEstadoLogin(user) {
+  const status = document.getElementById("loginStatus");
+  const send = document.querySelector(".ctrl-send");
+  if (user) {
+    if (status) status.textContent = "Conectado: " + (user.email || "conta Firebase");
+    if (send) send.title = "Enviar mensagem";
+  } else {
+    if (send) send.title = "Entrar para enviar";
+  }
+}
+
+async function entrarConta() {
+  const email = document.getElementById("loginEmail").value.trim();
+  const senha = document.getElementById("loginSenha").value;
+  const status = document.getElementById("loginStatus");
+  if (!email || !senha) {
+    status.textContent = "Informe e-mail e senha.";
+    return;
+  }
+  status.textContent = "Entrando...";
+  try {
+    const cred = await auth.signInWithEmailAndPassword(email, senha);
+    status.textContent = "Conectado: " + (cred.user.email || email);
+    document.getElementById("modalLogin").classList.remove("aberto");
+    toast("Login realizado. Agora suas mensagens serão salvas.");
+  } catch (err) {
+    console.error("Login Firebase:", err);
+    status.textContent = "E-mail ou senha inválidos.";
+    toast("Não foi possível entrar.");
+  }
+}
+
+async function entrarGoogle() {
+  const status = document.getElementById("loginStatus");
+  status.textContent = "Abrindo Google...";
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    const result = await auth.signInWithPopup(provider);
+    status.textContent = "Conectado: " + (result.user.email || "Google");
+    document.getElementById("modalLogin").classList.remove("aberto");
+    toast("Login Google realizado.");
+  } catch (err) {
+    console.error("Login Google:", err);
+    if (err && err.code === "auth/popup-blocked") {
+      try {
+        await auth.signInWithRedirect(provider);
+        return;
+      } catch (redirectErr) {
+        console.error("Redirect Google:", redirectErr);
+      }
+    }
+    status.textContent = "Login Google não disponível nesta configuração.";
+    toast("Não foi possível entrar com Google.");
+  }
+}
+
 function adicionarMembro() {
   const nome = document.getElementById("novoNome").value.trim();
   if (!nome) { toast("Digite um nome!"); return; }
@@ -321,19 +407,17 @@ function renderListaMensagens(lista) {
 
 async function enviar() {
   const input = document.getElementById("msgInput");
+  if (!auth.currentUser) {
+    abrirLogin();
+    toast("Entre na sua conta para enviar mensagens.");
+    return;
+  }
   const texto = input.value.trim();
   if (!texto) return;
 
   if(texto.startsWith('@ia ')) {
     chamarIA(texto.replace('@ia ', ''));
     input.value = "";
-    return;
-  }
-
-  try {
-    await autenticarAnonimo();
-  } catch (e) {
-    toast("Não foi possível autenticar. Tente novamente.");
     return;
   }
 
@@ -440,7 +524,11 @@ async function toggleGravacao() {
         reader.readAsDataURL(new Blob(audioChunks, { type:"audio/webm" }));
         reader.onloadend = async () => {
           try {
-            await autenticarAnonimo();
+            if (!auth.currentUser) {
+              abrirLogin();
+              toast("Entre na sua conta para enviar áudio.");
+              return;
+            }
             await dbMsg.push({ nome:meuNome, audio:reader.result, ts:Date.now() });
             somEnviar(); vibrar(60);
           } catch (err) {
@@ -505,8 +593,6 @@ async function chamarIA(pergunta) {
     dbMsg.push({ nome: "OIO IA", texto: "Tô offline, família. Tenta depois 💙", ts: Date.now() });
   }
 }
-
-autenticarAnonimo();
 
 document.addEventListener("touchstart", ()=>getAC(), {once:true});
 document.addEventListener("click", ()=>getAC(), {once:true});
