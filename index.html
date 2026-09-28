@@ -13,10 +13,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Nunito:wght@300;400;600;700&display=swap" rel="stylesheet">
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script>
 
 <style>
 :root{--accent:#00e5ff;--accent2:#00a8bf;--warm:#ff6b35;--love:#ff2d55;--glass:rgba(255,255,255,0.07);--glassh:rgba(255,255,255,0.13);--border:rgba(255,255,255,0.10);--bg:#060608;--surface:#0d0d12;--text:#e8e8f0;--muted:#6a6a80;--ff-head:'Rajdhani',sans-serif;--ff-body:'Nunito',sans-serif;--blur:blur(22px);--r:18px;--trans:all 0.35s cubic-bezier(0.4,0,0.2,1)}
@@ -757,13 +753,12 @@ async function toggleGravacao() {
       mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
       mediaRecorder.onstop = () => {
         clearInterval(tempoInterval);
-        dbStatus.child(meuNome).remove();
         input.placeholder = "Mensagem para a família...";
         const reader = new FileReader();
         reader.readAsDataURL(new Blob(audioChunks, { type:"audio/webm" }));
         reader.onloadend = async () => {
           try {
-            if (!auth.currentUser) {
+            if (!currentSupabaseUser) {
               abrirLogin();
               toast("Entre na sua conta para enviar áudio.");
               return;
@@ -777,7 +772,6 @@ async function toggleGravacao() {
         };
       };
       mediaRecorder.start();
-      dbStatus.child(meuNome).set({ gravando: true, ts: Date.now() });
       btn.classList.add("gravando");
       btn.querySelector("i").className = "fa-solid fa-stop";
       beep(440,.05);
