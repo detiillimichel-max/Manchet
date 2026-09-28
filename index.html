@@ -95,6 +95,97 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:var(-
 .modal-input:focus{border-color:var(--accent)}
 .modal-ok{width:100%;padding:15px;background:linear-gradient(135deg,var(--accent2),var(--accent));color:#000;border:none;border-radius:14px;font-family:var(--ff-head);font-size:.95rem;font-weight:700;letter-spacing:1px;cursor:pointer}
 </style>
+
+<style id="manchet-fast-ui">
+/* Manchet FAST — visual leve, inspirado em mensageiros nativos */
+#bg-canvas{display:none!important}
+#topo{
+  height:58px;
+  padding:0 12px 0 8px;
+  background:#17181d;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  border-bottom:1px solid rgba(255,255,255,.05);
+  justify-content:flex-start;
+  gap:8px;
+}
+.topo-back{
+  width:42px;height:42px;border:0;background:transparent;color:#e8e8ee;
+  display:flex;align-items:center;justify-content:center;font-size:1.35rem;
+}
+.topo-contact{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+.topo-avatar{
+  width:42px;height:42px;border-radius:50%;background:#00bcd4;color:#071014;
+  display:flex;align-items:center;justify-content:center;font-size:1.15rem;overflow:hidden;
+}
+.topo-avatar img{width:100%;height:100%;object-fit:cover}
+.topo-contact-text{display:flex;flex-direction:column;min-width:0;line-height:1.05}
+.topo-contact-text strong{font-family:var(--ff-body);font-size:1rem;font-weight:600;color:#f1f1f4}
+.topo-contact-text span{font-family:var(--ff-body);font-size:.68rem;color:#8d909b;margin-top:4px}
+.topo-actions{gap:4px}
+.topo-btn{width:40px;height:40px;display:flex;align-items:center;justify-content:center;color:#d9dbe2}
+#familia-bar{display:none!important}
+.tela{padding-top:58px;padding-bottom:66px}
+#tela-chat{background:#08090c}
+#mensagens{
+  padding:12px 10px 8px;
+  gap:6px;
+  scrollbar-width:none;
+}
+#mensagens::-webkit-scrollbar{display:none}
+.balao-wrap{gap:1px}
+.balao-autor{font-size:.58rem;padding:0 9px;color:#7c9da3}
+.balao{
+  max-width:82%;
+  padding:9px 13px;
+  border-radius:17px;
+  font-size:.88rem;
+  line-height:1.35;
+  animation:msgInFast .12s ease-out both;
+}
+@keyframes msgInFast{from{opacity:.2;transform:translateY(3px)}to{opacity:1;transform:none}}
+.balao.deles{
+  background:#202126;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  border:0;
+  border-bottom-left-radius:5px;
+}
+.balao.minha{
+  background:#19b8ce;
+  color:#061014;
+  border:0;
+  border-bottom-right-radius:5px;
+}
+.balao-time{font-size:.55rem;margin-top:4px}
+#controles{
+  min-height:62px;
+  padding:7px 9px calc(7px + env(safe-area-inset-bottom,0px));
+  background:#17181d;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+  border-top:1px solid rgba(255,255,255,.05);
+  gap:7px;
+}
+.ctrl-btn{width:42px;height:42px;background:#22242a;border:0}
+#msgInput{
+  min-width:0;
+  padding:11px 16px;
+  background:#22242a;
+  border:0;
+  font-size:.9rem;
+  height:44px;
+}
+#msgInput:focus{border:0;box-shadow:none}
+.ctrl-send{
+  width:44px;height:44px;
+  box-shadow:none;
+}
+#toasts{bottom:76px;width:92%}
+.toast{padding:10px 14px;border-radius:12px;font-size:.78rem}
+.modal-bg{backdrop-filter:none;-webkit-backdrop-filter:none}
+</style>
+
 </head>
 <body>
 <div id="progresso"></div>
@@ -102,9 +193,18 @@ html,body{height:100%;width:100%;overflow:hidden;position:fixed;background:var(-
 <div id="toasts"></div>
 
 <header id="topo">
-  <div class="logo">OIO ONE<span class="logo-tag">FAMÍLIA</span></div>
+  <button class="topo-back" onclick="voltarChat()" aria-label="Voltar">
+    <i class="fa-solid fa-arrow-left"></i>
+  </button>
+  <div class="topo-contact">
+    <div class="topo-avatar" id="topoAvatar"><i class="fa-solid fa-user"></i></div>
+    <div class="topo-contact-text">
+      <strong>Família</strong>
+      <span>OIO ONE</span>
+    </div>
+  </div>
   <div class="topo-actions">
-    <i class="fa-solid fa-comment-dots topo-btn" onclick="abrirTela('chat')"></i>
+    <i class="fa-solid fa-ellipsis-vertical topo-btn" onclick="toast('Família · mensagens de texto e áudio')"></i>
   </div>
 </header>
 
@@ -203,21 +303,6 @@ function toast(msg) {
   setTimeout(() => { t.style.opacity="0"; t.style.transition="opacity.3s"; setTimeout(()=>t.remove(),300); }, 2800);
 }
 
-(function bgCanvas(){
-  const cvs = document.getElementById("bg-canvas");
-  const ctx = cvs.getContext("2d");
-  let W, H, pts=[];
-  function resize(){ W=cvs.width=window.innerWidth; H=cvs.height=window.innerHeight; }
-  resize(); window.addEventListener("resize",resize);
-  for(let i=0;i<28;i++) pts.push({ x:Math.random()*2000, y:Math.random()*2000, vx:(Math.random()-.5)*.3, vy:(Math.random()-.5)*.3, r:Math.random()*1.8+.5, a:Math.random() });
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    pts.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; if(p.x<0||p.x>W) p.vx*=-1; if(p.y<0||p.y>H) p.vy*=-1; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fillStyle=`rgba(0,229,255,${p.a*.6})`; ctx.fill(); });
-    requestAnimationFrame(draw);
-  }
-  draw();
-})();
-
 const membrosDefault = [
   { nome:"Michel", foto:"https://github.com/MichelDetilli.png", emoji:"" },
   { nome:"Gabriela", foto:"", emoji:"👩" }
@@ -246,7 +331,7 @@ function renderMembros() {
 
 function trocarMembro(nome) {
   meuNome = nome; localStorage.setItem("oio_nome", nome);
-  vibrar(30); renderMembros(); toast(`Você é ${nome} agora`);
+  vibrar(30); renderMembros(); atualizarCabecalho(); toast(`Você é ${nome} agora`);
 }
 renderMembros();
 
@@ -364,6 +449,20 @@ function fecharModal(e) {
     document.getElementById("modalMembro").classList.remove("aberto");
 }
 
+function voltarChat() {
+  if (history.length > 1) history.back();
+  else toast("Você já está no chat.");
+}
+
+function atualizarCabecalho() {
+  const avatar = document.getElementById("topoAvatar");
+  if (!avatar) return;
+  const foto = membrosLista.find(m => m.nome === meuNome)?.foto || minhaFoto;
+  avatar.innerHTML = foto
+    ? `<img src="${foto}" alt="">`
+    : '<i class="fa-solid fa-user"></i>';
+}
+
 function abrirTela(id) {
   document.querySelectorAll(".tela").forEach(t=>t.classList.remove("ativa"));
   document.getElementById("tela-"+id).classList.add("ativa");
@@ -423,17 +522,28 @@ async function enviar() {
     ts: Date.now()
   };
 
-  dbMsg.push(mensagem)
-    .then(() => {
-      somEnviar();
-      vibrar(40);
-    })
-    .catch(err => {
-      console.error("Falha ao salvar mensagem:", err);
-      toast("Mensagem não salva. Verifique a conexão.");
-    });
-
+  // Mostra imediatamente, como um mensageiro nativo.
+  const pushRef = dbMsg.push();
+  mensagem.id = pushRef.key;
+  mensagem.pendente = true;
+  const instantList = mensagensCache.concat([mensagem]).slice(-100);
+  mensagensCache = instantList;
+  renderListaMensagens(instantList);
+  salvarCacheMensagens(instantList);
+  somEnviar();
+  vibrar(25);
   input.value = "";
+
+  pushRef.set({
+    nome: mensagem.nome,
+    foto: mensagem.foto || "",
+    texto: mensagem.texto,
+    ts: mensagem.ts,
+    id: mensagem.id
+  }).catch(err => {
+    console.error("Falha ao salvar mensagem:", err);
+    toast("Mensagem não salva. Verifique a conexão.");
+  });
 }
 
 let primeiraCarga = true;
