@@ -1,4 +1,4 @@
-const CACHE_NAME = 'manchet-chat-v2';
+const CACHE_NAME = 'manchet-chat-v3';
 
 const APP_SHELL = [
   './',
