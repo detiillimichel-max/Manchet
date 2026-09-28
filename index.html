@@ -13,6 +13,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&family=Nunito:wght@300;400;600;700&display=swap" rel="stylesheet">
 
 <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.17.1/firebase-storage-compat.js"></script>
 
@@ -141,8 +142,46 @@ const firebaseConfig = {
   storageBucket: "vibe-app-bbba2.appspot.com"
 };
 firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 const db = firebase.database();
 const storage = firebase.storage();
+
+let authReady = false;
+let authPromise = null;
+
+function autenticarAnonimo() {
+  if (auth.currentUser) {
+    authReady = true;
+    return Promise.resolve(auth.currentUser);
+  }
+  if (authPromise) return authPromise;
+
+  authPromise = auth.signInAnonymously()
+    .then(result => {
+      authReady = true;
+      console.log("Firebase Auth anônimo ativo:", result.user.uid);
+      return result.user;
+    })
+    .catch(err => {
+      authReady = false;
+      authPromise = null;
+      console.error("Falha no Firebase Auth anônimo:", err);
+      const msg = err && err.code === "auth/operation-not-allowed"
+        ? "Ative o login Anônimo no Firebase Authentication."
+        : "Não foi possível autenticar no Firebase.";
+      toast(msg);
+      throw err;
+    });
+
+  return authPromise;
+}
+
+auth.onAuthStateChanged(user => {
+  authReady = !!user;
+  if (user) console.log("Firebase autenticado:", user.uid);
+});
+
+autenticarAnonimo();
 const dbMsg = db.ref("familia_mensagens");
 const dbStatus = db.ref("familia_status");
 
@@ -280,7 +319,7 @@ function renderListaMensagens(lista) {
   if (eraNoFundo || primeiraCarga) container.scrollTop = container.scrollHeight;
 }
 
-function enviar() {
+async function enviar() {
   const input = document.getElementById("msgInput");
   const texto = input.value.trim();
   if (!texto) return;
@@ -288,6 +327,13 @@ function enviar() {
   if(texto.startsWith('@ia ')) {
     chamarIA(texto.replace('@ia ', ''));
     input.value = "";
+    return;
+  }
+
+  try {
+    await autenticarAnonimo();
+  } catch (e) {
+    toast("Não foi possível autenticar. Tente novamente.");
     return;
   }
 
@@ -392,9 +438,15 @@ async function toggleGravacao() {
         input.placeholder = "Mensagem para a família...";
         const reader = new FileReader();
         reader.readAsDataURL(new Blob(audioChunks, { type:"audio/webm" }));
-        reader.onloadend = () => {
-          dbMsg.push({ nome:meuNome, audio:reader.result, ts:Date.now() });
-          somEnviar(); vibrar(60);
+        reader.onloadend = async () => {
+          try {
+            await autenticarAnonimo();
+            await dbMsg.push({ nome:meuNome, audio:reader.result, ts:Date.now() });
+            somEnviar(); vibrar(60);
+          } catch (err) {
+            console.error("Falha ao salvar áudio:", err);
+            toast("Áudio não salvo. Verifique a autenticação.");
+          }
         };
       };
       mediaRecorder.start();
@@ -453,6 +505,8 @@ async function chamarIA(pergunta) {
     dbMsg.push({ nome: "OIO IA", texto: "Tô offline, família. Tenta depois 💙", ts: Date.now() });
   }
 }
+
+autenticarAnonimo();
 
 document.addEventListener("touchstart", ()=>getAC(), {once:true});
 document.addEventListener("click", ()=>getAC(), {once:true});
